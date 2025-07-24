@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 // כתובת ה-API שלך
 const API = "https://class-tracking.onrender.com/api";
-const TEACHER_PASSWORD = "1234"; // שנה כאן לסיסמה שלך
+const TEACHER_PASSWORD = "555555"; // שנה כאן לסיסמה שלך
 
 // הודעה יפה
 function InfoMsg({ children, color = "#32b06c" }) {
