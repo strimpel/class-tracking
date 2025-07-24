@@ -222,10 +222,10 @@ function TeacherView({ onLogout }) {
       body: JSON.stringify({ name: name.trim() }),
     })
       .then(() => {
-        setMsg("משימה נוצרה");
-        setTimeout(() => setMsg(""), 1500);
-        fetchTasks();
-      })
+  setMsg("משימה נוצרה");
+  fetchTasks();
+  setTimeout(() => setMsg(""), 1500);
+})
       .finally(() => setLoading(false));
   };
 
