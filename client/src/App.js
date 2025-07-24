@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 
+// כתובת ה-API שלך מ-Render:
 const API = "https://class-tracking.onrender.com/api";
-const TEACHER_PASSWORD = "753951"; // שנה לסיסמה שתרצה
+const TEACHER_PASSWORD = "753951"; // שנה כאן לסיסמה שלך
 
 function StudentView({ onGoToTeacher, studentName, setStudentName }) {
   const [status, setStatus] = useState("לא התחיל");
   const [task, setTask] = useState("");
+  const [inputValue, setInputValue] = useState(studentName || "");
 
   useEffect(() => {
     fetch(API + "/status")
@@ -22,21 +24,49 @@ function StudentView({ onGoToTeacher, studentName, setStudentName }) {
     }).then(() => setStatus(newStatus));
   };
 
-  // שומר את שם התלמיד ב-localStorage
-  const handleNameChange = (e) => {
-    setStudentName(e.target.value);
-    localStorage.setItem("studentName", e.target.value);
+  const handleSubmitName = (e) => {
+    e.preventDefault();
+    if (inputValue.trim().split(" ").length < 2) {
+      alert("נא להזין שם פרטי ושם משפחה");
+      return;
+    }
+    setStudentName(inputValue.trim());
+    localStorage.setItem("studentName", inputValue.trim());
+  };
+
+  const handleLogout = () => {
+    setStudentName("");
+    localStorage.removeItem("studentName");
+    setInputValue("");
+    setStatus("לא התחיל");
   };
 
   return (
-    <div style={{ direction: 'rtl', maxWidth: 300, margin: '0 auto', background: "#fff", borderRadius: 14, boxShadow: "0 2px 12px #0001", padding: 24, marginTop: 40 }}>
+    <div style={{ direction: 'rtl', maxWidth: 320, margin: '0 auto', background: "#fff", borderRadius: 14, boxShadow: "0 2px 12px #0001", padding: 24, marginTop: 40 }}>
       <h2>משימה: {task}</h2>
-      <input
-        placeholder="הכנס שם"
-        value={studentName}
-        onChange={handleNameChange}
-        style={{ width: '100%', marginBottom: 8, padding: 8, borderRadius: 8, border: "1px solid #bbb", fontSize: 16 }}
-      />
+
+      {!studentName ? (
+        <form onSubmit={handleSubmitName} style={{ marginBottom: 16 }}>
+          <input
+            placeholder="שם פרטי ושם משפחה"
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+            style={{ width: '100%', marginBottom: 8, padding: 8, borderRadius: 8, border: "1px solid #bbb", fontSize: 16 }}
+            autoFocus
+          />
+          <button
+            type="submit"
+            style={{ padding: "8px 12px", background: "#4169e1", color: "#fff", border: "none", borderRadius: 8, fontSize: 15, width: "100%" }}
+          >
+            אשר שם
+          </button>
+        </form>
+      ) : (
+        <div style={{ marginBottom: 16 }}>
+          <b>שלום, {studentName}!</b>
+        </div>
+      )}
+
       <div>
         <button
           disabled={!studentName || status !== 'לא התחיל'}
@@ -56,6 +86,16 @@ function StudentView({ onGoToTeacher, studentName, setStudentName }) {
       <div style={{ marginTop: 10 }}>
         <b>הסטטוס שלך: {status}</b>
       </div>
+
+      {studentName && (
+        <button
+          style={{ marginTop: 14, background: "none", border: "none", color: "#888", textDecoration: "underline", cursor: "pointer", fontSize: 13 }}
+          onClick={handleLogout}
+        >
+          התנתק/י
+        </button>
+      )}
+
       <button
         style={{ marginTop: 16, background: "none", border: "none", color: "#222", textDecoration: "underline", cursor: "pointer" }}
         onClick={onGoToTeacher}
@@ -138,7 +178,6 @@ export default function App() {
   const [pw, setPw] = useState("");
   const [studentName, setStudentName] = useState(localStorage.getItem("studentName") || "");
 
-  // נטען פעם אחת - בדיקה האם המשתמש נכנס כ-"מורה"
   useEffect(() => {
     const isTeacher = localStorage.getItem("isTeacher");
     if (isTeacher === "true") {
@@ -147,13 +186,11 @@ export default function App() {
     }
   }, []);
 
-  // כשמתחברים כמורה - נשמור בזיכרון
   const unlockTeacher = () => {
     setTeacherUnlocked(true);
     localStorage.setItem("isTeacher", "true");
   };
 
-  // ביציאה ממורה - נשכח מהסטטוס
   const logoutTeacher = () => {
     setMode("student");
     setTeacherUnlocked(false);
