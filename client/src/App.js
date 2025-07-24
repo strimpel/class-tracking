@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 // כתובת ה-API שלך
 const API = "https://class-tracking.onrender.com/api";
-const TEACHER_PASSWORD = "555555"; // שנה כאן לסיסמה שלך
+const TEACHER_PASSWORD = "1234"; // שנה כאן לסיסמה שלך
 
 // הודעה יפה
 function InfoMsg({ children, color = "#32b06c" }) {
@@ -151,7 +151,6 @@ function TeacherView({ onLogout }) {
   const [err, setErr] = useState("");
 
   const refresh = () => {
-    setLoading(true);
     fetch(API + "/status")
       .then(res => res.json())
       .then(data => {
@@ -159,11 +158,15 @@ function TeacherView({ onLogout }) {
         setTask(data.currentTask);
         setErr("");
       })
-      .catch(() => setErr("שגיאה בטעינת נתונים!"))
-      .finally(() => setLoading(false));
+      .catch(() => setErr("שגיאה בטעינת נתונים!"));
   };
 
-  useEffect(refresh, []);
+  // Polling: כל 2.5 שניות רענון אוטומטי של נתוני התלמידים!
+  useEffect(() => {
+    refresh();
+    const interval = setInterval(refresh, 2500);
+    return () => clearInterval(interval);
+  }, []);
 
   const resetAllStatus = () => {
     setLoading(true);
