@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 // כתובת ה-API שלך מ-Render:
 const API = "https://class-tracking.onrender.com/api";
-const TEACHER_PASSWORD = "753951"; // שנה כאן לסיסמה שלך
+const TEACHER_PASSWORD = "555555"; // שנה כאן לסיסמה שלך
 
 function StudentView({ onGoToTeacher, studentName, setStudentName }) {
   const [status, setStatus] = useState("לא התחיל");
