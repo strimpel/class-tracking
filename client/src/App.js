@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
-// כתובת ה-API שלך
 const API = "https://class-tracking.onrender.com/api";
-const TEACHER_PASSWORD = "555555"; // שנה כאן לסיסמה שלך
+const TEACHER_PASSWORD = "555555"; // שנה לסיסמה שלך!
 
-// הודעה יפה
 function InfoMsg({ children, color = "#32b06c" }) {
   return (
     <div style={{
@@ -26,18 +24,11 @@ function Loader() {
   return <div style={{ textAlign: "center", color: "#4169e1", margin: 22 }}>טוען...</div>
 }
 
-function StudentView({ onGoToTeacher, studentName, setStudentName }) {
+function StudentView({ onGoToTeacher, studentName, setStudentName, task }) {
   const [status, setStatus] = useState("לא התחיל");
-  const [task, setTask] = useState("");
   const [inputValue, setInputValue] = useState(studentName || "");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
-
-  useEffect(() => {
-    fetch(API + "/status")
-      .then(res => res.json())
-      .then(data => setTask(data.currentTask));
-  }, []);
 
   const updateStatus = (newStatus) => {
     if (!studentName) return;
@@ -77,8 +68,7 @@ function StudentView({ onGoToTeacher, studentName, setStudentName }) {
 
   return (
     <div style={{ direction: 'rtl', maxWidth: 340, margin: '0 auto', background: "#fff", borderRadius: 14, boxShadow: "0 2px 16px #0002", padding: 24, marginTop: 40 }}>
-      <h2 style={{ color: "#4169e1", fontWeight: 500 }}>משימה: {task}</h2>
-
+      <h2 style={{ color: "#4169e1", fontWeight: 500 }}>משימה: {task || "אין משימה נוכחית"}</h2>
       {!studentName ? (
         <form onSubmit={handleSubmitName} style={{ marginBottom: 16 }}>
           <input
@@ -142,16 +132,59 @@ function StudentView({ onGoToTeacher, studentName, setStudentName }) {
   );
 }
 
+function TaskPanel({ tasksList, activeTaskId, onCreate, onDelete, onSelect, loading }) {
+  const [newTaskName, setNewTaskName] = useState("");
+  return (
+    <div style={{ flex: 1, minWidth: 200, background: "#f7faff", borderRadius: 14, boxShadow: "0 2px 12px #0001", padding: 18, height: "fit-content" }}>
+      <div style={{ fontWeight: 500, fontSize: 18, marginBottom: 6 }}>משימות בכיתה</div>
+      <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        {tasksList.map(t =>
+          <li key={t.id} style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            margin: "6px 0", background: t.id === activeTaskId ? "#eaf3ff" : "transparent",
+            borderRadius: 7, padding: "4px 7px"
+          }}>
+            <span style={{ fontWeight: t.id === activeTaskId ? 700 : 400 }}>
+              {t.name}
+              {t.id === activeTaskId && <span style={{ color: "#4169e1", marginRight: 6 }}>⭐</span>}
+            </span>
+            <span>
+              {t.id !== activeTaskId && (
+                <button onClick={() => onSelect(t.id)} style={{ fontSize: 13, marginLeft: 7, border: "none", color: "#4169e1", background: "none", cursor: "pointer" }}>הפוך לנוכחית</button>
+              )}
+              <button onClick={() => onDelete(t.id)} style={{ fontSize: 13, border: "none", color: "#d32f2f", background: "none", cursor: "pointer" }}>🗑️</button>
+            </span>
+          </li>
+        )}
+      </ul>
+      <div style={{ marginTop: 14 }}>
+        <input
+          style={{ width: "80%", padding: 6, borderRadius: 7, border: "1px solid #bbb" }}
+          placeholder="שם משימה חדשה"
+          value={newTaskName}
+          onChange={e => setNewTaskName(e.target.value)}
+          disabled={loading}
+        />
+        <button
+          onClick={() => { if (newTaskName.trim()) { onCreate(newTaskName); setNewTaskName(""); } }}
+          style={{ marginRight: 5, padding: "7px 12px", background: "#4169e1", color: "#fff", border: "none", borderRadius: 8 }}
+          disabled={loading}
+        >
+          צור משימה חדשה
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TeacherView({ onLogout }) {
   const [students, setStudents] = useState([]);
   const [task, setTask] = useState("");
-  const [newTask, setNewTask] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [tasksList, setTasksList] = useState([]);
   const [activeTaskId, setActiveTaskId] = useState(null);
-  const [newTaskName, setNewTaskName] = useState("");
 
   // קבלת כל המשימות מהשרת
   const fetchTasks = () =>
@@ -183,17 +216,16 @@ function TeacherView({ onLogout }) {
   }, []);
 
   // יצירת משימה חדשה
-  const createTask = () => {
-    if (!newTaskName.trim()) return;
+  const createTask = (name) => {
+    if (!name.trim()) return;
     setLoading(true);
     fetch(API + "/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newTaskName.trim() }),
+      body: JSON.stringify({ name: name.trim() }),
     })
       .then(() => {
         setMsg("משימה נוצרה");
-        setNewTaskName("");
         fetchTasks();
         setTimeout(() => setMsg(""), 1500);
       })
@@ -230,64 +262,115 @@ function TeacherView({ onLogout }) {
       .finally(() => setLoading(false));
   };
 
-  // שאר הפונקציות שלך...
+  // איפוס סטטוס בלבד
+  const resetAllStatus = () => {
+    setLoading(true);
+    fetch(API + "/reset", { method: "POST" })
+      .then(() => {
+        setMsg("הסטטוסים אופסו");
+        refresh();
+        setTimeout(() => setMsg(""), 1800);
+      })
+      .catch(() => setMsg("שגיאה!"))
+      .finally(() => setLoading(false));
+  };
+
+  // איפוס כללי - מחיקת כל התלמידים
+  const resetEverything = () => {
+    if (!window.confirm("האם אתה בטוח שברצונך למחוק את כל התלמידים?")) return;
+    setLoading(true);
+    fetch(API + "/reset-all", { method: "POST" })
+      .then(() => {
+        setMsg("כל התלמידים נמחקו!");
+        refresh();
+        setTimeout(() => setMsg(""), 1800);
+      })
+      .catch(() => setMsg("שגיאה!"))
+      .finally(() => setLoading(false));
+  };
 
   return (
-    <div style={{ direction: 'rtl', display: "flex", gap: 12, maxWidth: 950, margin: '0 auto', marginTop: 30 }}>
+    <div style={{ direction: 'rtl', display: "flex", gap: 12, maxWidth: 1000, margin: '0 auto', marginTop: 30 }}>
       <div style={{ flex: 2 }}>
-        {/* כאן כל הטבלה וכל הפונקציונליות של התלמידים כמו עכשיו */}
-        {/* ... */}
-        {/* את שם המשימה שואבים מה-task (כמו עכשיו) */}
-      </div>
-      <div style={{ flex: 1, minWidth: 200, background: "#f7faff", borderRadius: 14, boxShadow: "0 2px 12px #0001", padding: 18, height: "fit-content" }}>
-        <div style={{ fontWeight: 500, fontSize: 18, marginBottom: 6 }}>משימות בכיתה</div>
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {tasksList.map(t =>
-            <li key={t.id} style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              margin: "6px 0", background: t.id === activeTaskId ? "#eaf3ff" : "transparent",
-              borderRadius: 7, padding: "4px 7px"
-            }}>
-              <span style={{ fontWeight: t.id === activeTaskId ? 700 : 400 }}>
-                {t.name}
-                {t.id === activeTaskId && <span style={{ color: "#4169e1", marginRight: 6 }}>⭐</span>}
-              </span>
-              <span>
-                {t.id !== activeTaskId && (
-                  <button onClick={() => selectTask(t.id)} style={{ fontSize: 13, marginLeft: 7, border: "none", color: "#4169e1", background: "none", cursor: "pointer" }}>הפוך לנוכחית</button>
-                )}
-                <button onClick={() => deleteTask(t.id)} style={{ fontSize: 13, border: "none", color: "#d32f2f", background: "none", cursor: "pointer" }}>🗑️</button>
-              </span>
-            </li>
-          )}
-        </ul>
-        <div style={{ marginTop: 14 }}>
-          <input
-            style={{ width: "80%", padding: 6, borderRadius: 7, border: "1px solid #bbb" }}
-            placeholder="שם משימה חדשה"
-            value={newTaskName}
-            onChange={e => setNewTaskName(e.target.value)}
-            disabled={loading}
-          />
+        <h2 style={{ color: "#4169e1", fontWeight: 500 }}>משימה נוכחית: {task || "אין"}</h2>
+        <div style={{ margin: "10px 0 5px 0", fontSize: 17, fontWeight: 400 }}>
+          <span style={{ color: "#888" }}>סה״כ תלמידים:</span> <b style={{ color: "#4169e1" }}>{students.length}</b>
+        </div>
+        <div style={{ maxHeight: 340, overflowY: "auto", marginTop: 10 }}>
+          <table border="0" style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#f4f6fa" }}>
+                <th style={{ padding: 8, borderBottom: "1.5px solid #eaeaea" }}>שם</th>
+                <th style={{ padding: 8, borderBottom: "1.5px solid #eaeaea" }}>סטטוס</th>
+              </tr>
+            </thead>
+            <tbody>
+              {students.length === 0 ? (
+                <tr><td colSpan={2} style={{ textAlign: "center", color: "#aaa", padding: 20 }}>אין תלמידים רשומים</td></tr>
+              ) : students.map(s => (
+                <tr key={s.name}>
+                  <td style={{ padding: 7, borderBottom: "1.5px solid #f5f5f5" }}>{s.name}</td>
+                  <td style={{
+                    padding: 7,
+                    borderBottom: "1.5px solid #f5f5f5",
+                    color: s.status === "סיים" ? "#32b06c" : s.status === "בתהליך" ? "#e2991e" : "#333",
+                    fontWeight: s.status === "סיים" ? 600 : 400
+                  }}>
+                    {s.status}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
           <button
-            onClick={createTask}
-            style={{ marginRight: 5, padding: "7px 12px", background: "#4169e1", color: "#fff", border: "none", borderRadius: 8 }}
+            style={{ flex: 1, padding: "10px 10px", background: "#ffb347", color: "#333", border: "none", borderRadius: 8, fontSize: 15, fontWeight: 500, transition: "background 0.2s" }}
+            onClick={resetAllStatus}
             disabled={loading}
           >
-            צור משימה חדשה
+            אפס סטטוס
+          </button>
+          <button
+            style={{ flex: 1, padding: "10px 10px", background: "#ff5757", color: "#fff", border: "none", borderRadius: 8, fontSize: 15, fontWeight: 500, transition: "background 0.2s" }}
+            onClick={resetEverything}
+            disabled={loading}
+          >
+            איפוס הכל (כולל תלמידים)
           </button>
         </div>
+        <button style={{ marginTop: 18, marginRight: 8, background: "none", border: "none", color: "#4169e1", textDecoration: "underline", cursor: "pointer", fontWeight: 500, fontSize: 15 }} onClick={onLogout}>התנתקות</button>
+        {loading && <Loader />}
+        {msg && <InfoMsg>{msg}</InfoMsg>}
+        {err && <InfoMsg color="#e25d3c">{err}</InfoMsg>}
       </div>
+      <TaskPanel
+        tasksList={tasksList}
+        activeTaskId={activeTaskId}
+        onCreate={createTask}
+        onDelete={deleteTask}
+        onSelect={selectTask}
+        loading={loading}
+      />
     </div>
   );
 }
-
 
 export default function App() {
   const [mode, setMode] = useState("student");
   const [teacherUnlocked, setTeacherUnlocked] = useState(false);
   const [pw, setPw] = useState("");
   const [studentName, setStudentName] = useState(localStorage.getItem("studentName") || "");
+  const [activeTask, setActiveTask] = useState("");
+
+  // טוען מה המשימה הנוכחית בשביל התלמידים בלבד
+  const fetchActiveTask = () =>
+    fetch(API + "/tasks")
+      .then(res => res.json())
+      .then(data => {
+        const curr = data.tasks.find(t => t.id === data.activeTaskId);
+        setActiveTask(curr ? curr.name : "");
+      });
 
   useEffect(() => {
     const isTeacher = localStorage.getItem("isTeacher");
@@ -295,6 +378,9 @@ export default function App() {
       setMode("teacher");
       setTeacherUnlocked(true);
     }
+    fetchActiveTask();
+    const interval = setInterval(fetchActiveTask, 2500); // גם התלמיד יתעדכן ב-live!
+    return () => clearInterval(interval);
   }, []);
 
   const unlockTeacher = () => {
@@ -327,6 +413,7 @@ export default function App() {
           onGoToTeacher={goToTeacher}
           studentName={studentName}
           setStudentName={setStudentName}
+          task={activeTask}
         />
       ) : !teacherUnlocked ? (
         <div style={{ maxWidth: 320, margin: "50px auto", background: "#fff", borderRadius: 14, boxShadow: "0 2px 12px #0001", padding: 32, textAlign: 'center' }}>
