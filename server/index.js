@@ -21,9 +21,11 @@ app.post("/api/tasks", (req, res) => {
   if (!name || typeof name !== "string") return res.status(400).json({ error: "חסר שם" });
   const id = Date.now().toString();
   tasks.push({ id, name, students: [] });
-  if (!activeTaskId) activeTaskId = id;
+  // הפוך לאקטיבי אם זו המשימה היחידה או אם אין כרגע משימה אקטיבית
+  if (!activeTaskId || tasks.length === 1) activeTaskId = id;
   res.json({ ok: true, id });
 });
+
 
 // מחיקת משימה
 app.delete("/api/tasks/:id", (req, res) => {
