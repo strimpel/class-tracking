@@ -47,3 +47,43 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
 });
+
+//after panel
+let tasks = [
+  // { id: "123", name: "תרגול 1" }
+];
+let activeTaskId = null;
+
+// קבלת כל המשימות והמשימה הפעילה
+app.get('/api/tasks', (req, res) => {
+  res.json({ tasks, activeTaskId });
+});
+
+// יצירת משימה חדשה
+app.post('/api/tasks', (req, res) => {
+  const { name } = req.body;
+  const id = Date.now().toString();
+  tasks.push({ id, name });
+  if (!activeTaskId) activeTaskId = id; // המשימה הראשונה שנוצרת הופכת לפעילה
+  res.json({ ok: true, id });
+});
+
+// מחיקת משימה
+app.delete('/api/tasks/:id', (req, res) => {
+  const { id } = req.params;
+  tasks = tasks.filter(t => t.id !== id);
+  if (activeTaskId === id) {
+    activeTaskId = tasks.length ? tasks[0].id : null;
+  }
+  res.json({ ok: true });
+});
+
+// קביעת משימה נוכחית
+app.post('/api/tasks/select', (req, res) => {
+  const { id } = req.body;
+  activeTaskId = id;
+  res.json({ ok: true });
+});
+
+// תעדכן גם את /api/status וכל מקום שצריך שישתמש בשם של המשימה הפעילה מתוך tasks.find(t=>t.id===activeTaskId)
+
