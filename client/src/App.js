@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 
-const API = "https://class-tracking.onrender.com/api";
-const TEACHER_PASSWORD = "555555"; // שנה לסיסמה שלך!
+// עדכן כאן את כתובת ה־API שלך אם צריך
+const API = "/api";
+const TEACHER_PASSWORD = "555555";
 
 function InfoMsg({ children, color = "#32b06c" }) {
   return (
@@ -24,11 +25,19 @@ function Loader() {
   return <div style={{ textAlign: "center", color: "#4169e1", margin: 22 }}>טוען...</div>
 }
 
-function StudentView({ onGoToTeacher, studentName, setStudentName, task }) {
+function StudentView({ onGoToTeacher, studentName, setStudentName, taskName }) {
   const [status, setStatus] = useState("לא התחיל");
   const [inputValue, setInputValue] = useState(studentName || "");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    fetch(API + "/status")
+      .then(res => res.json())
+      .then(data => {
+        if (data.currentTask === "") setStatus("לא התחיל");
+      });
+  }, [taskName]);
 
   const updateStatus = (newStatus) => {
     if (!studentName) return;
@@ -68,7 +77,7 @@ function StudentView({ onGoToTeacher, studentName, setStudentName, task }) {
 
   return (
     <div style={{ direction: 'rtl', maxWidth: 340, margin: '0 auto', background: "#fff", borderRadius: 14, boxShadow: "0 2px 16px #0002", padding: 24, marginTop: 40 }}>
-      <h2 style={{ color: "#4169e1", fontWeight: 500 }}>משימה: {task || "אין משימה נוכחית"}</h2>
+      <h2 style={{ color: "#4169e1", fontWeight: 500 }}>משימה: {taskName || "אין משימה נוכחית"}</h2>
       {!studentName ? (
         <form onSubmit={handleSubmitName} style={{ marginBottom: 16 }}>
           <input
@@ -112,7 +121,6 @@ function StudentView({ onGoToTeacher, studentName, setStudentName, task }) {
       <div style={{ marginTop: 12, fontWeight: 500, fontSize: 16 }}>
         {loading ? <Loader /> : <>הסטטוס שלך: <span style={{ color: status === "סיים" ? "#32b06c" : "#333" }}>{status}</span></>}
       </div>
-
       {studentName && (
         <button
           style={{ marginTop: 14, background: "none", border: "none", color: "#888", textDecoration: "underline", cursor: "pointer", fontSize: 13 }}
@@ -121,7 +129,6 @@ function StudentView({ onGoToTeacher, studentName, setStudentName, task }) {
           התנתק/י
         </button>
       )}
-
       <button
         style={{ marginTop: 16, background: "none", border: "none", color: "#222", textDecoration: "underline", cursor: "pointer" }}
         onClick={onGoToTeacher}
@@ -132,16 +139,16 @@ function StudentView({ onGoToTeacher, studentName, setStudentName, task }) {
   );
 }
 
-function TaskPanel({ tasksList, activeTaskId, onCreate, onDelete, onSelect, loading }) {
+function TaskPanel({ tasks, activeTaskId, selectedTaskId, onCreate, onDelete, onSelect, onActive, loading }) {
   const [newTaskName, setNewTaskName] = useState("");
   return (
     <div style={{ flex: 1, minWidth: 200, background: "#f7faff", borderRadius: 14, boxShadow: "0 2px 12px #0001", padding: 18, height: "fit-content" }}>
       <div style={{ fontWeight: 500, fontSize: 18, marginBottom: 6 }}>משימות בכיתה</div>
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-        {tasksList.map(t =>
+        {tasks.map(t =>
           <li key={t.id} style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            margin: "6px 0", background: t.id === activeTaskId ? "#eaf3ff" : "transparent",
+            margin: "6px 0", background: t.id === selectedTaskId ? "#eaf3ff" : "transparent",
             borderRadius: 7, padding: "4px 7px"
           }}>
             <span style={{ fontWeight: t.id === activeTaskId ? 700 : 400 }}>
@@ -150,8 +157,9 @@ function TaskPanel({ tasksList, activeTaskId, onCreate, onDelete, onSelect, load
             </span>
             <span>
               {t.id !== activeTaskId && (
-                <button onClick={() => onSelect(t.id)} style={{ fontSize: 13, marginLeft: 7, border: "none", color: "#4169e1", background: "none", cursor: "pointer" }}>הפוך לנוכחית</button>
+                <button onClick={() => onActive(t.id)} style={{ fontSize: 13, marginLeft: 7, border: "none", color: "#4169e1", background: "none", cursor: "pointer" }}>הפוך לנוכחית</button>
               )}
+              <button onClick={() => onSelect(t.id)} style={{ fontSize: 13, border: "none", color: "#789", background: "none", cursor: "pointer", marginLeft: 7 }}>👁️</button>
               <button onClick={() => onDelete(t.id)} style={{ fontSize: 13, border: "none", color: "#d32f2f", background: "none", cursor: "pointer" }}>🗑️</button>
             </span>
           </li>
@@ -178,41 +186,30 @@ function TaskPanel({ tasksList, activeTaskId, onCreate, onDelete, onSelect, load
 }
 
 function TeacherView({ onLogout }) {
-  const [students, setStudents] = useState([]);
-  const [task, setTask] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [tasks, setTasks] = useState([]);
+  const [activeTaskId, setActiveTaskId] = useState(null);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
-  const [tasksList, setTasksList] = useState([]);
-  const [activeTaskId, setActiveTaskId] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  // קבלת כל המשימות מהשרת
+  // מביא את כל המשימות מהשרת (עם טבלאות הסטודנטים)
   const fetchTasks = () =>
     fetch(API + "/tasks")
       .then(res => res.json())
       .then(data => {
-        setTasksList(data.tasks);
+        setTasks(data.tasks);
         setActiveTaskId(data.activeTaskId);
-        const curr = data.tasks.find(t => t.id === data.activeTaskId);
-        setTask(curr ? curr.name : "");
+        // ברירת מחדל: נבחרת המשימה הפעילה
+        if (!selectedTaskId && data.activeTaskId)
+          setSelectedTaskId(data.activeTaskId);
       });
 
-  const refresh = () => {
-    fetch(API + "/status")
-      .then(res => res.json())
-      .then(data => {
-        setStudents(data.students);
-        fetchTasks();
-        setErr("");
-      })
-      .catch(() => setErr("שגיאה בטעינת נתונים!"));
-  };
-
-  // polling
   useEffect(() => {
-    refresh();
-    const interval = setInterval(refresh, 2500);
+    fetchTasks();
+    const interval = setInterval(fetchTasks, 2500);
     return () => clearInterval(interval);
+    // eslint-disable-next-line
   }, []);
 
   // יצירת משימה חדשה
@@ -226,8 +223,8 @@ function TeacherView({ onLogout }) {
     })
       .then(() => {
         setMsg("משימה נוצרה");
-        fetchTasks();
         setTimeout(() => setMsg(""), 1500);
+        fetchTasks();
       })
       .finally(() => setLoading(false));
   };
@@ -239,14 +236,15 @@ function TeacherView({ onLogout }) {
     fetch(API + `/tasks/${id}`, { method: "DELETE" })
       .then(() => {
         setMsg("משימה נמחקה");
-        fetchTasks();
         setTimeout(() => setMsg(""), 1500);
+        fetchTasks();
+        if (selectedTaskId === id) setSelectedTaskId(null);
       })
       .finally(() => setLoading(false));
   };
 
-  // בחירת משימה נוכחית
-  const selectTask = id => {
+  // הפוך לנוכחית
+  const makeActiveTask = id => {
     setLoading(true);
     fetch(API + "/tasks/select", {
       method: "POST",
@@ -256,45 +254,61 @@ function TeacherView({ onLogout }) {
       .then(() => {
         setMsg("משימה נבחרה כפעילה");
         setActiveTaskId(id);
-        fetchTasks();
         setTimeout(() => setMsg(""), 1200);
+        fetchTasks();
       })
       .finally(() => setLoading(false));
   };
 
-  // איפוס סטטוס בלבד
+  // בחר לצפות בטבלת המשימה (לא בהכרח הפעילה)
+  const viewTask = id => setSelectedTaskId(id);
+
+  // איפוס סטטוס רק למשימה שנצפית כרגע
   const resetAllStatus = () => {
+    if (!selectedTaskId) return;
     setLoading(true);
-    fetch(API + "/reset", { method: "POST" })
-      .then(() => {
-        setMsg("הסטטוסים אופסו");
-        refresh();
-        setTimeout(() => setMsg(""), 1800);
-      })
+    // לאפס סטטוס אפשר רק דרך הפעלה של המשימה כנוכחית (הכי פשוט לוגית)
+    fetch(API + "/tasks/select", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: selectedTaskId }),
+    }).then(() =>
+      fetch(API + "/reset", { method: "POST" })
+    ).then(() => {
+      setMsg("הסטטוסים אופסו");
+      fetchTasks();
+      setTimeout(() => setMsg(""), 1800);
+    })
       .catch(() => setMsg("שגיאה!"))
       .finally(() => setLoading(false));
   };
 
-  // איפוס כללי - מחיקת כל התלמידים
+  // איפוס כללי – מוחק תלמידים מכל המשימות
   const resetEverything = () => {
-    if (!window.confirm("האם אתה בטוח שברצונך למחוק את כל התלמידים?")) return;
+    if (!window.confirm("האם אתה בטוח שברצונך למחוק את כל התלמידים מכל המשימות?")) return;
     setLoading(true);
     fetch(API + "/reset-all", { method: "POST" })
       .then(() => {
         setMsg("כל התלמידים נמחקו!");
-        refresh();
+        fetchTasks();
         setTimeout(() => setMsg(""), 1800);
       })
       .catch(() => setMsg("שגיאה!"))
       .finally(() => setLoading(false));
   };
 
+  // איזו משימה מוצגת עכשיו?
+  const selectedTask = tasks.find(t => t.id === selectedTaskId);
+
   return (
     <div style={{ direction: 'rtl', display: "flex", gap: 12, maxWidth: 1000, margin: '0 auto', marginTop: 30 }}>
       <div style={{ flex: 2 }}>
-        <h2 style={{ color: "#4169e1", fontWeight: 500 }}>משימה נוכחית: {task || "אין"}</h2>
+        <h2 style={{ color: "#4169e1", fontWeight: 500 }}>
+          {selectedTask ? `משימה: ${selectedTask.name}` : "בחר משימה מהפאנל"}
+          {selectedTask && selectedTask.id === activeTaskId && <span style={{ color: "#4169e1" }}> ⭐ (משימה נוכחית לתלמידים)</span>}
+        </h2>
         <div style={{ margin: "10px 0 5px 0", fontSize: 17, fontWeight: 400 }}>
-          <span style={{ color: "#888" }}>סה״כ תלמידים:</span> <b style={{ color: "#4169e1" }}>{students.length}</b>
+          <span style={{ color: "#888" }}>סה״כ תלמידים:</span> <b style={{ color: "#4169e1" }}>{selectedTask?.students.length || 0}</b>
         </div>
         <div style={{ maxHeight: 340, overflowY: "auto", marginTop: 10 }}>
           <table border="0" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -305,9 +319,9 @@ function TeacherView({ onLogout }) {
               </tr>
             </thead>
             <tbody>
-              {students.length === 0 ? (
+              {!selectedTask || selectedTask.students.length === 0 ? (
                 <tr><td colSpan={2} style={{ textAlign: "center", color: "#aaa", padding: 20 }}>אין תלמידים רשומים</td></tr>
-              ) : students.map(s => (
+              ) : selectedTask.students.map(s => (
                 <tr key={s.name}>
                   <td style={{ padding: 7, borderBottom: "1.5px solid #f5f5f5" }}>{s.name}</td>
                   <td style={{
@@ -327,16 +341,16 @@ function TeacherView({ onLogout }) {
           <button
             style={{ flex: 1, padding: "10px 10px", background: "#ffb347", color: "#333", border: "none", borderRadius: 8, fontSize: 15, fontWeight: 500, transition: "background 0.2s" }}
             onClick={resetAllStatus}
-            disabled={loading}
+            disabled={loading || !selectedTaskId}
           >
-            אפס סטטוס
+            אפס סטטוס למשימה
           </button>
           <button
             style={{ flex: 1, padding: "10px 10px", background: "#ff5757", color: "#fff", border: "none", borderRadius: 8, fontSize: 15, fontWeight: 500, transition: "background 0.2s" }}
             onClick={resetEverything}
             disabled={loading}
           >
-            איפוס הכל (כולל תלמידים)
+            איפוס הכל (כל המשימות)
           </button>
         </div>
         <button style={{ marginTop: 18, marginRight: 8, background: "none", border: "none", color: "#4169e1", textDecoration: "underline", cursor: "pointer", fontWeight: 500, fontSize: 15 }} onClick={onLogout}>התנתקות</button>
@@ -345,11 +359,13 @@ function TeacherView({ onLogout }) {
         {err && <InfoMsg color="#e25d3c">{err}</InfoMsg>}
       </div>
       <TaskPanel
-        tasksList={tasksList}
+        tasks={tasks}
         activeTaskId={activeTaskId}
+        selectedTaskId={selectedTaskId}
         onCreate={createTask}
         onDelete={deleteTask}
-        onSelect={selectTask}
+        onSelect={viewTask}
+        onActive={makeActiveTask}
         loading={loading}
       />
     </div>
@@ -361,15 +377,15 @@ export default function App() {
   const [teacherUnlocked, setTeacherUnlocked] = useState(false);
   const [pw, setPw] = useState("");
   const [studentName, setStudentName] = useState(localStorage.getItem("studentName") || "");
-  const [activeTask, setActiveTask] = useState("");
+  const [taskName, setTaskName] = useState("");
 
-  // טוען מה המשימה הנוכחית בשביל התלמידים בלבד
+  // מביא רק את המשימה הנוכחית בשביל התלמיד
   const fetchActiveTask = () =>
     fetch(API + "/tasks")
       .then(res => res.json())
       .then(data => {
         const curr = data.tasks.find(t => t.id === data.activeTaskId);
-        setActiveTask(curr ? curr.name : "");
+        setTaskName(curr ? curr.name : "");
       });
 
   useEffect(() => {
@@ -379,7 +395,7 @@ export default function App() {
       setTeacherUnlocked(true);
     }
     fetchActiveTask();
-    const interval = setInterval(fetchActiveTask, 2500); // גם התלמיד יתעדכן ב-live!
+    const interval = setInterval(fetchActiveTask, 2500); // גם התלמיד מתעדכן LIVE
     return () => clearInterval(interval);
   }, []);
 
@@ -413,7 +429,7 @@ export default function App() {
           onGoToTeacher={goToTeacher}
           studentName={studentName}
           setStudentName={setStudentName}
-          task={activeTask}
+          taskName={taskName}
         />
       ) : !teacherUnlocked ? (
         <div style={{ maxWidth: 320, margin: "50px auto", background: "#fff", borderRadius: 14, boxShadow: "0 2px 12px #0001", padding: 32, textAlign: 'center' }}>
