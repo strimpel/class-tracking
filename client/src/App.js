@@ -10,7 +10,9 @@ function App() {
   const [mode, setMode] = useState(null); // 'teacher' | 'student'
   const [teacher, setTeacher] = useState(null); // { username }
   const [student, setStudent] = useState(null); // { studentId, classId, firstName, lastName }
-
+  useEffect(() => {
+    alert("ברק שלח לי הודעה 0549762434 לא שמרתי את המספר שלך");
+  }, []);
   // שמירה ב-localStorage
   useEffect(() => {
     const m = localStorage.getItem("mode");
