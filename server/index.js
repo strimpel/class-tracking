@@ -19,6 +19,11 @@ app.post('/api/task', (req, res) => {
     res.json({ ok: true, currentTask });
 });
 
+app.post('/api/reset-all', (req, res) => {
+    students = [];
+    res.json({ ok: true });
+});
+
 app.post('/api/student', (req, res) => {
     const { name, status } = req.body;
     let student = students.find(s => s.name === name);
