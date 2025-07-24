@@ -1,79 +1,134 @@
-const express = require("express");
-const cors = require("cors");
-const app = express();
-const PORT = process.env.PORT || 3001;
+const express = require('express');
+const http = require('http');
+const cors = require('cors');
+const { Server } = require('socket.io');
+const bcrypt = require('bcrypt');
+const { v4: uuidv4 } = require('uuid');
 
-app.use(cors());
+const app = express();
+app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// State: רשימת משימות וזיהוי המשימה הנוכחית
-let tasks = [];
-let activeTaskId = null;
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: '*' } });
 
-// החזרת כל המשימות וזיהוי המשימה הנוכחית
-app.get("/api/tasks", (req, res) => {
-  res.json({ tasks, activeTaskId });
+// --- DATA IN MEMORY --- //
+let admins = [
+  // Example: { username: 'teacher', passwordHash: '...' }
+];
+let classes = [
+  // Example:
+  // {
+  //   id, name, code, adminUsername,
+  //   students: [{ id, firstName, lastName }],
+  //   tasks: [{ id, name, isCurrent, statuses: { [studentId]: 'not_started'|'started'|'finished' } }]
+  // }
+];
+
+// ----------- Auth ------------- //
+app.post('/api/register', async (req, res) => {
+  const { username, password } = req.body;
+  if (admins.find(a => a.username === username)) {
+    return res.status(409).json({ message: 'Username exists' });
+  }
+  const passwordHash = await bcrypt.hash(password, 10);
+  admins.push({ username, passwordHash });
+  res.json({ message: 'Registered successfully' });
 });
 
-// החזרת המשימה הנוכחית (לתלמיד)
-app.get("/api/status", (req, res) => {
-  const task = tasks.find(t => t.id === activeTaskId);
-  res.json({
-    currentTask: task ? task.name : "",
-    students: task ? task.students : []
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  const admin = admins.find(a => a.username === username);
+  if (!admin || !(await bcrypt.compare(password, admin.passwordHash))) {
+    return res.status(401).json({ message: 'Invalid credentials' });
+  }
+  // For demo: no JWT, just status
+  res.json({ success: true, username });
+});
+
+// ---------- Classes CRUD ----------- //
+app.post('/api/class', (req, res) => {
+  const { name, code, adminUsername } = req.body;
+  const id = uuidv4();
+  classes.push({
+    id, name, code, adminUsername,
+    students: [],
+    tasks: [],
   });
+  res.json({ id, name, code });
 });
 
-// יצירת משימה חדשה
-app.post("/api/tasks", (req, res) => {
-  const { name } = req.body;
-  if (!name) return res.status(400).json({ error: "Missing name" });
-  const id = Date.now().toString();
-  tasks.push({ id, name, students: [] });
-  if (!activeTaskId) activeTaskId = id;
-  res.json({ ok: true, id });
+app.get('/api/classes', (req, res) => {
+  const { adminUsername } = req.query;
+  res.json(classes.filter(cls => cls.adminUsername === adminUsername));
 });
 
-// מחיקת משימה
-app.delete("/api/tasks/:id", (req, res) => {
+app.delete('/api/class/:id', (req, res) => {
   const { id } = req.params;
-  tasks = tasks.filter(t => t.id !== id);
-  if (activeTaskId === id) activeTaskId = tasks[0]?.id || null;
-  res.json({ ok: true });
+  classes = classes.filter(cls => cls.id !== id);
+  res.json({ message: 'Deleted' });
 });
 
-// הפיכת משימה לנוכחית
-app.post("/api/tasks/select", (req, res) => {
-  const { id } = req.body;
-  if (!tasks.find(t => t.id === id)) return res.status(404).json({ error: "Task not found" });
-  activeTaskId = id;
-  res.json({ ok: true });
+// ---------- Students join ---------- //
+app.post('/api/join', (req, res) => {
+  const { code, firstName, lastName } = req.body;
+  const cls = classes.find(c => c.code === code);
+  if (!cls) return res.status(404).json({ message: 'Class not found' });
+  let student = cls.students.find(s => s.firstName === firstName && s.lastName === lastName);
+  if (!student) {
+    student = { id: uuidv4(), firstName, lastName };
+    cls.students.push(student);
+  }
+  res.json({ classId: cls.id, studentId: student.id, firstName, lastName });
 });
 
-// עדכון סטטוס לתלמיד במשימה הנוכחית
-app.post("/api/student", (req, res) => {
-  const { name, status } = req.body;
-  if (!name || !status || !activeTaskId) return res.status(400).json({ error: "Missing data" });
-  const task = tasks.find(t => t.id === activeTaskId);
-  if (!task) return res.status(404).json({ error: "Active task not found" });
-  let student = task.students.find(s => s.name === name);
-  if (student) student.status = status;
-  else task.students.push({ name, status });
-  res.json({ ok: true });
+// ---------- Socket.io for Real-Time ---------- //
+io.on('connection', (socket) => {
+  // student or teacher joins class room
+  socket.on('join_class', ({ classId }) => {
+    socket.join(classId);
+  });
+
+  // Teacher adds task
+  socket.on('add_task', ({ classId, name }) => {
+    const cls = classes.find(c => c.id === classId);
+    if (!cls) return;
+    const id = uuidv4();
+    const task = { id, name, isCurrent: false, statuses: {} };
+    cls.tasks.push(task);
+    io.to(classId).emit('update_class', cls);
+  });
+
+  // Teacher sets current task
+  socket.on('set_current_task', ({ classId, taskId }) => {
+    const cls = classes.find(c => c.id === classId);
+    if (!cls) return;
+    cls.tasks.forEach(t => t.isCurrent = t.id === taskId);
+    io.to(classId).emit('update_class', cls);
+  });
+
+  // Teacher deletes task
+  socket.on('delete_task', ({ classId, taskId }) => {
+    const cls = classes.find(c => c.id === classId);
+    if (!cls) return;
+    cls.tasks = cls.tasks.filter(t => t.id !== taskId);
+    io.to(classId).emit('update_class', cls);
+  });
+
+  // Student or Teacher updates status
+  socket.on('update_status', ({ classId, taskId, studentId, status }) => {
+    const cls = classes.find(c => c.id === classId);
+    if (!cls) return;
+    const task = cls.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    task.statuses[studentId] = status;
+    io.to(classId).emit('update_class', cls);
+  });
+
+  // Student added (already handled in REST, but can join here as well)
+  socket.on('disconnect', () => { });
 });
 
-// איפוס סטטוס לכל התלמידים במשימה (לפי ID)
-app.post("/api/tasks/:id/reset", (req, res) => {
-  const { id } = req.params;
-  const task = tasks.find(t => t.id === id);
-  if (task) task.students.forEach(s => s.status = "לא התחיל");
-  res.json({ ok: true });
+server.listen(4000, () => {
+  console.log('Server running on port 4000');
 });
-
-// איפוס כל התלמידים בכל המשימות
-app.post("/api/reset-all", (req, res) => {
-  tasks.forEach(t => t.students = []);
-  res.json({ ok: true });
-});
-
-app.listen(PORT, () => console.log("Server running on port", PORT));
