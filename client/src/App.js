@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 
-// עדכן כאן את כתובת ה־API שלך אם צריך
+// שנה כאן לכתובת ה-API שלך אם צריך (למשל, אם השרת רץ על render – שים את ה-URL המלא)
 const API = "/api";
 const TEACHER_PASSWORD = "555555";
 
@@ -201,7 +201,7 @@ function TeacherView({ onLogout }) {
         setTasks(data.tasks);
         setActiveTaskId(data.activeTaskId);
         // ברירת מחדל: נבחרת המשימה הפעילה
-        if (!selectedTaskId && data.activeTaskId)
+        if ((!selectedTaskId || !data.tasks.find(t => t.id === selectedTaskId)) && data.activeTaskId)
           setSelectedTaskId(data.activeTaskId);
       });
 
@@ -221,11 +221,11 @@ function TeacherView({ onLogout }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name.trim() }),
     })
+      .then(() => fetchTasks())
       .then(() => {
-  setMsg("משימה נוצרה");
-  fetchTasks();
-  setTimeout(() => setMsg(""), 1500);
-})
+        setMsg("משימה נוצרה");
+        setTimeout(() => setMsg(""), 1500);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -234,11 +234,11 @@ function TeacherView({ onLogout }) {
     if (!window.confirm("למחוק את המשימה?")) return;
     setLoading(true);
     fetch(API + `/tasks/${id}`, { method: "DELETE" })
+      .then(() => fetchTasks())
       .then(() => {
         setMsg("משימה נמחקה");
         setTimeout(() => setMsg(""), 1500);
-        fetchTasks();
-        if (selectedTaskId === id) setSelectedTaskId(null);
+        setSelectedTaskId(null);
       })
       .finally(() => setLoading(false));
   };
@@ -251,11 +251,10 @@ function TeacherView({ onLogout }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     })
+      .then(() => fetchTasks())
       .then(() => {
         setMsg("משימה נבחרה כפעילה");
-        setActiveTaskId(id);
         setTimeout(() => setMsg(""), 1200);
-        fetchTasks();
       })
       .finally(() => setLoading(false));
   };
@@ -267,18 +266,17 @@ function TeacherView({ onLogout }) {
   const resetAllStatus = () => {
     if (!selectedTaskId) return;
     setLoading(true);
-    // לאפס סטטוס אפשר רק דרך הפעלה של המשימה כנוכחית (הכי פשוט לוגית)
     fetch(API + "/tasks/select", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: selectedTaskId }),
     }).then(() =>
       fetch(API + "/reset", { method: "POST" })
-    ).then(() => {
-      setMsg("הסטטוסים אופסו");
-      fetchTasks();
-      setTimeout(() => setMsg(""), 1800);
-    })
+    ).then(() => fetchTasks())
+      .then(() => {
+        setMsg("הסטטוסים אופסו");
+        setTimeout(() => setMsg(""), 1800);
+      })
       .catch(() => setMsg("שגיאה!"))
       .finally(() => setLoading(false));
   };
@@ -288,9 +286,9 @@ function TeacherView({ onLogout }) {
     if (!window.confirm("האם אתה בטוח שברצונך למחוק את כל התלמידים מכל המשימות?")) return;
     setLoading(true);
     fetch(API + "/reset-all", { method: "POST" })
+      .then(() => fetchTasks())
       .then(() => {
         setMsg("כל התלמידים נמחקו!");
-        fetchTasks();
         setTimeout(() => setMsg(""), 1800);
       })
       .catch(() => setMsg("שגיאה!"))
