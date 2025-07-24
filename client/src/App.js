@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
-// שים כאן את כתובת ה-API שלך מ-Render!
 const API = "https://class-tracking.onrender.com/api";
-const TEACHER_PASSWORD = "Barak-Fast-Track"; // שנה כאן לסיסמה שתרצה
+const TEACHER_PASSWORD = "753951"; // שנה לסיסמה שתרצה
 
-function StudentView({ onGoToTeacher }) {
-  const [name, setName] = useState("");
+function StudentView({ onGoToTeacher, studentName, setStudentName }) {
   const [status, setStatus] = useState("לא התחיל");
   const [task, setTask] = useState("");
 
@@ -16,12 +14,18 @@ function StudentView({ onGoToTeacher }) {
   }, []);
 
   const updateStatus = (newStatus) => {
-    if (!name) return;
+    if (!studentName) return;
     fetch(API + "/student", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, status: newStatus }),
+      body: JSON.stringify({ name: studentName, status: newStatus }),
     }).then(() => setStatus(newStatus));
+  };
+
+  // שומר את שם התלמיד ב-localStorage
+  const handleNameChange = (e) => {
+    setStudentName(e.target.value);
+    localStorage.setItem("studentName", e.target.value);
   };
 
   return (
@@ -29,13 +33,13 @@ function StudentView({ onGoToTeacher }) {
       <h2>משימה: {task}</h2>
       <input
         placeholder="הכנס שם"
-        value={name}
-        onChange={e => setName(e.target.value)}
+        value={studentName}
+        onChange={handleNameChange}
         style={{ width: '100%', marginBottom: 8, padding: 8, borderRadius: 8, border: "1px solid #bbb", fontSize: 16 }}
       />
       <div>
         <button
-          disabled={!name || status !== 'לא התחיל'}
+          disabled={!studentName || status !== 'לא התחיל'}
           onClick={() => updateStatus("בתהליך")}
           style={{ padding: "8px 12px", margin: "4px", background: "#4169e1", color: "#fff", border: "none", borderRadius: 8, fontSize: 15 }}
         >
@@ -129,9 +133,32 @@ function TeacherView({ onLogout }) {
 }
 
 export default function App() {
-  const [mode, setMode] = useState("student"); // או teacher
+  const [mode, setMode] = useState("student");
   const [teacherUnlocked, setTeacherUnlocked] = useState(false);
   const [pw, setPw] = useState("");
+  const [studentName, setStudentName] = useState(localStorage.getItem("studentName") || "");
+
+  // נטען פעם אחת - בדיקה האם המשתמש נכנס כ-"מורה"
+  useEffect(() => {
+    const isTeacher = localStorage.getItem("isTeacher");
+    if (isTeacher === "true") {
+      setMode("teacher");
+      setTeacherUnlocked(true);
+    }
+  }, []);
+
+  // כשמתחברים כמורה - נשמור בזיכרון
+  const unlockTeacher = () => {
+    setTeacherUnlocked(true);
+    localStorage.setItem("isTeacher", "true");
+  };
+
+  // ביציאה ממורה - נשכח מהסטטוס
+  const logoutTeacher = () => {
+    setMode("student");
+    setTeacherUnlocked(false);
+    localStorage.removeItem("isTeacher");
+  };
 
   const goToTeacher = () => {
     setPw("");
@@ -139,7 +166,6 @@ export default function App() {
     setTeacherUnlocked(false);
   };
 
-  // מסך ראשי: בוחר האם תלמיד, או מסך כניסת מורה
   return (
     <div style={{
       padding: 16,
@@ -149,7 +175,11 @@ export default function App() {
     }}>
       <h1 style={{ textAlign: 'center', color: "#222", letterSpacing: "1px", marginTop: 18, fontWeight: 500 }}>מעקב סטטוס תרגול</h1>
       {mode === "student" ? (
-        <StudentView onGoToTeacher={goToTeacher} />
+        <StudentView
+          onGoToTeacher={goToTeacher}
+          studentName={studentName}
+          setStudentName={setStudentName}
+        />
       ) : !teacherUnlocked ? (
         <div style={{ maxWidth: 320, margin: "50px auto", background: "#fff", borderRadius: 14, boxShadow: "0 2px 12px #0001", padding: 32, textAlign: 'center' }}>
           <h2>כניסת מורה</h2>
@@ -159,10 +189,10 @@ export default function App() {
             value={pw}
             onChange={e => setPw(e.target.value)}
             style={{ width: "100%", padding: 8, marginBottom: 10, fontSize: 16, borderRadius: 8, border: "1px solid #aaa" }}
-            onKeyDown={e => { if (e.key === "Enter") if (pw === TEACHER_PASSWORD) setTeacherUnlocked(true); }}
+            onKeyDown={e => { if (e.key === "Enter") if (pw === TEACHER_PASSWORD) unlockTeacher(); }}
           />
           <button
-            onClick={() => { if (pw === TEACHER_PASSWORD) setTeacherUnlocked(true); }}
+            onClick={() => { if (pw === TEACHER_PASSWORD) unlockTeacher(); }}
             style={{ width: "100%", padding: 10, fontSize: 16, background: "#4169e1", color: "#fff", border: "none", borderRadius: 8 }}
           >
             כניסה
@@ -173,7 +203,7 @@ export default function App() {
           <button style={{ marginTop: 12, background: "none", border: "none", color: "#555", textDecoration: "underline" }} onClick={() => setMode("student")}>חזור לתלמיד</button>
         </div>
       ) : (
-        <TeacherView onLogout={() => { setMode("student"); setTeacherUnlocked(false); }} />
+        <TeacherView onLogout={logoutTeacher} />
       )}
     </div>
   );
