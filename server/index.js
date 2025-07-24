@@ -26,7 +26,6 @@ app.post("/api/tasks", (req, res) => {
   res.json({ ok: true, id });
 });
 
-
 // מחיקת משימה
 app.delete("/api/tasks/:id", (req, res) => {
   const { id } = req.params;
