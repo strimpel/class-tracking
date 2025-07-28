@@ -16,11 +16,10 @@ export default function StudentDashboard({ student, onLogout }) {
     socket.emit("join_class", { classId: student.classId });
 
     // שליפת מצב עדכני
-    axios.get(`${API_URL}/api/classes?adminUsername=none`).then(({ data }) => {
-      // מוצא את הכיתה מתוך כל הכיתות
-      const cls = data.find(c => c.id === student.classId);
-      if (cls) setClassObj(cls);
-    });
+    axios.get(`${API_URL}/api/class/${student.classId}`).then(({ data }) => {
+  setClassObj(data);
+});
+
 
     // קבלת עדכונים חיים
     function updateListener(cls) {
