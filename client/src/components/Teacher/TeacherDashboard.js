@@ -13,36 +13,31 @@ export default function TeacherDashboard({ teacher, onLogout }) {
   const [selectedClass, setSelectedClass] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
 
-  // טען כיתות של מורה זה
   useEffect(() => {
-    axios.get(`${API_URL}/api/classes?adminUsername=${teacher.username}`).then(({ data }) => {
+    if (!teacher) return;
+    // superadmin רואה הכל
+    const user = teacher.isSuperAdmin ? "superadmin" : teacher.username;
+    axios.get(`${API_URL}/api/classes?adminUsername=${user}`).then(({ data }) => {
       setClasses(data);
       if (data.length > 0) setSelectedClass(data[0]);
     });
   }, [teacher]);
 
-  // הצטרף לחדר socket של הכיתה
   useEffect(() => {
     if (selectedClass) {
-      socket.emit("join_class", { classId: selectedClass.id });
+      socket.emit("join_class", { classId: selectedClass._id });
     }
   }, [selectedClass]);
 
-  // קבל עדכון realtime מכל שינוי בכיתה
   useEffect(() => {
     function updateListener(cls) {
-      setClasses(prev => prev.map(c => c.id === cls.id ? cls : c));
-      if (selectedClass && selectedClass.id === cls.id) setSelectedClass(cls);
+      setClasses(prev => prev.map(c => c._id === cls._id ? cls : c));
+      if (selectedClass && selectedClass._id === cls._id) setSelectedClass(cls);
     }
     socket.on("update_class", updateListener);
     return () => socket.off("update_class", updateListener);
-    // eslint-disable-next-line
   }, [selectedClass]);
 
-  // בוחר משימה
-  const handleSelectTask = task => setSelectedTask(task);
-
-  // עדכון ברירת מחדל למשימה
   useEffect(() => {
     if (selectedClass && selectedClass.tasks.length > 0) {
       const curr = selectedClass.tasks.find(t => t.isCurrent) || selectedClass.tasks[0];
@@ -55,7 +50,9 @@ export default function TeacherDashboard({ teacher, onLogout }) {
   return (
     <Box>
       <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-        <Typography variant="h5">שלום, {teacher.username}</Typography>
+        <Typography variant="h5">
+          {teacher.isSuperAdmin ? "סופר־אדמין" : `שלום, ${teacher.username}`}
+        </Typography>
         <Button onClick={onLogout} color="secondary" variant="outlined">התנתק</Button>
       </Box>
       <Divider sx={{ mb: 2 }} />
@@ -71,7 +68,7 @@ export default function TeacherDashboard({ teacher, onLogout }) {
           <TaskSidebar
             classObj={selectedClass}
             setClasses={setClasses}
-            onSelectTask={handleSelectTask}
+            onSelectTask={setSelectedTask}
             selectedTask={selectedTask}
           />
           <Box flexGrow={1} ml={2}>
