@@ -15,7 +15,6 @@ export default function TeacherDashboard({ teacher, onLogout }) {
 
   useEffect(() => {
     if (!teacher) return;
-    // superadmin רואה הכל
     const user = teacher.isSuperAdmin ? "superadmin" : teacher.username;
     axios.get(`${API_URL}/api/classes?adminUsername=${user}`).then(({ data }) => {
       setClasses(data);
