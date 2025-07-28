@@ -60,13 +60,15 @@ app.post('/api/class', (req, res) => {
 
 app.get('/api/classes', (req, res) => {
   const { adminUsername } = req.query;
-  res.json(classes.filter(cls => cls.adminUsername === adminUsername));
+  res.json(classes.filter(cls => cls.adminUsername === adminUsername || adminUsername === 'none'));
 });
 
-app.delete('/api/class/:id', (req, res) => {
+
+app.get('/api/class/:id', (req, res) => {
   const { id } = req.params;
-  classes = classes.filter(cls => cls.id !== id);
-  res.json({ message: 'Deleted' });
+  const cls = classes.find(c => c.id === id);
+  if (!cls) return res.status(404).json({ message: "Class not found" });
+  res.json(cls);
 });
 
 // ---------- Students join ---------- //
