@@ -40,7 +40,7 @@ export default function StudentTaskTable({ classObj, student }) {
               <TableCell>
                 <Select
                   size="small"
-                  value={task.statuses[student.studentId] || "not_started"}
+                  value={task.statuses?.[student.studentId] || "not_started"}
                   onChange={e => handleStatusChange(task.id, e.target.value)}
                 >
                   {statuses.map(st => (
