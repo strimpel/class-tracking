@@ -1,9 +1,10 @@
-const express = require('express');
-const http = require('http');
-const cors = require('cors');
-const { Server } = require('socket.io');
-const bcrypt = require('bcrypt');
-const { v4: uuidv4 } = require('uuid');
+import express from 'express';
+import http from 'http';
+import cors from 'cors';
+import { Server } from 'socket.io';
+import bcrypt from 'bcrypt';
+import { v4 as uuidv4 } from 'uuid';
+import mongoose from 'mongoose';
 
 const app = express();
 app.use(cors({ origin: '*' }));
@@ -12,123 +13,152 @@ app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
-// --- DATA IN MEMORY --- //
-let admins = [
-  // Example: { username: 'teacher', passwordHash: '...' }
-];
-let classes = [
-  // Example:
-  // {
-  //   id, name, code, adminUsername,
-  //   students: [{ id, firstName, lastName }],
-  //   tasks: [{ id, name, isCurrent, statuses: { [studentId]: 'not_started'|'started'|'finished' } }]
-  // }
-];
+mongoose.connect(process.env.MONGO_URL, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+
+// Models
+const adminSchema = new mongoose.Schema({
+  username: String,
+  passwordHash: String
+});
+const Admin = mongoose.model('Admin', adminSchema);
+
+const studentSchema = new mongoose.Schema({
+  id: String,
+  firstName: String,
+  lastName: String
+}, { _id: false });
+
+const taskSchema = new mongoose.Schema({
+  id: String,
+  name: String,
+  isCurrent: Boolean,
+  statuses: mongoose.Schema.Types.Mixed // studentId -> status
+}, { _id: false });
+
+const classSchema = new mongoose.Schema({
+  name: String,
+  code: String,
+  adminUsername: String,
+  students: [studentSchema],
+  tasks: [taskSchema]
+});
+const Class = mongoose.model('Class', classSchema);
 
 // ----------- Auth ------------- //
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
-  if (admins.find(a => a.username === username)) {
+  if (await Admin.findOne({ username })) {
     return res.status(409).json({ message: 'Username exists' });
   }
   const passwordHash = await bcrypt.hash(password, 10);
-  admins.push({ username, passwordHash });
+  await Admin.create({ username, passwordHash });
   res.json({ message: 'Registered successfully' });
 });
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
-  const admin = admins.find(a => a.username === username);
+  const admin = await Admin.findOne({ username });
   if (!admin || !(await bcrypt.compare(password, admin.passwordHash))) {
     return res.status(401).json({ message: 'Invalid credentials' });
   }
-  // For demo: no JWT, just status
   res.json({ success: true, username });
 });
 
 // ---------- Classes CRUD ----------- //
-app.post('/api/class', (req, res) => {
+app.post('/api/class', async (req, res) => {
   const { name, code, adminUsername } = req.body;
-  const id = uuidv4();
-  classes.push({
-    id, name, code, adminUsername,
+  const cls = await Class.create({
+    name, code, adminUsername,
     students: [],
-    tasks: [],
+    tasks: []
   });
-  res.json({ id, name, code });
+  res.json(cls);
 });
 
-app.get('/api/classes', (req, res) => {
+app.get('/api/classes', async (req, res) => {
   const { adminUsername } = req.query;
-  res.json(classes.filter(cls => cls.adminUsername === adminUsername || adminUsername === 'none'));
+  const classes = await Class.find({ adminUsername });
+  res.json(classes);
 });
 
-
-app.get('/api/class/:id', (req, res) => {
+app.get('/api/class/:id', async (req, res) => {
   const { id } = req.params;
-  const cls = classes.find(c => c.id === id);
+  const cls = await Class.findById(id);
   if (!cls) return res.status(404).json({ message: "Class not found" });
   res.json(cls);
 });
 
+app.delete('/api/class/:id', async (req, res) => {
+  await Class.findByIdAndDelete(req.params.id);
+  res.json({ message: 'Deleted' });
+});
+
 // ---------- Students join ---------- //
-app.post('/api/join', (req, res) => {
+app.post('/api/join', async (req, res) => {
   const { code, firstName, lastName } = req.body;
-  const cls = classes.find(c => c.code === code);
+  const cls = await Class.findOne({ code });
   if (!cls) return res.status(404).json({ message: 'Class not found' });
   let student = cls.students.find(s => s.firstName === firstName && s.lastName === lastName);
   if (!student) {
     student = { id: uuidv4(), firstName, lastName };
     cls.students.push(student);
+    await cls.save();
   }
-  res.json({ classId: cls.id, studentId: student.id, firstName, lastName });
+  res.json({ classId: cls._id, studentId: student.id, firstName, lastName });
 });
 
 // ---------- Socket.io for Real-Time ---------- //
 io.on('connection', (socket) => {
-  // student or teacher joins class room
+  // הצטרפות לכיתה (room)
   socket.on('join_class', ({ classId }) => {
     socket.join(classId);
   });
 
-  // Teacher adds task
-  socket.on('add_task', ({ classId, name }) => {
-    const cls = classes.find(c => c.id === classId);
+  // הוספת משימה
+  socket.on('add_task', async ({ classId, name }) => {
+    const cls = await Class.findById(classId);
     if (!cls) return;
     const id = uuidv4();
     const task = { id, name, isCurrent: false, statuses: {} };
     cls.tasks.push(task);
+    await cls.save();
     io.to(classId).emit('update_class', cls);
   });
 
-  // Teacher sets current task
-  socket.on('set_current_task', ({ classId, taskId }) => {
-    const cls = classes.find(c => c.id === classId);
+  // סימון משימה כנוכחית
+  socket.on('set_current_task', async ({ classId, taskId }) => {
+    const cls = await Class.findById(classId);
     if (!cls) return;
     cls.tasks.forEach(t => t.isCurrent = t.id === taskId);
+    await cls.save();
     io.to(classId).emit('update_class', cls);
   });
 
-  // Teacher deletes task
-  socket.on('delete_task', ({ classId, taskId }) => {
-    const cls = classes.find(c => c.id === classId);
+  // מחיקת משימה
+  socket.on('delete_task', async ({ classId, taskId }) => {
+    const cls = await Class.findById(classId);
     if (!cls) return;
     cls.tasks = cls.tasks.filter(t => t.id !== taskId);
+    await cls.save();
     io.to(classId).emit('update_class', cls);
   });
 
-  // Student or Teacher updates status
-  socket.on('update_status', ({ classId, taskId, studentId, status }) => {
-    const cls = classes.find(c => c.id === classId);
+  // עדכון סטטוס של תלמיד
+  socket.on('update_status', async ({ classId, taskId, studentId, status }) => {
+    const cls = await Class.findById(classId);
     if (!cls) return;
     const task = cls.tasks.find(t => t.id === taskId);
     if (!task) return;
+    if (!task.statuses) task.statuses = {};
     task.statuses[studentId] = status;
+    await cls.save();
     io.to(classId).emit('update_class', cls);
   });
 
-  // Student added (already handled in REST, but can join here as well)
-  socket.on('disconnect', () => { });
+  socket.on('disconnect', () => {});
 });
 
 server.listen(4000, () => {
