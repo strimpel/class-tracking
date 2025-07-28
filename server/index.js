@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import mongoose from 'mongoose';
 
 const SUPERADMIN_USERNAME = "superadmin";
-const SUPERADMIN_PASSWORD = "super123@"; // לשנות לסיסמא שלך
+const SUPERADMIN_PASSWORD = "super123@"; // שנה לסיסמה שלך
 
 const app = express();
 app.use(cors({ origin: '*' }));
@@ -16,7 +16,7 @@ app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
-mongoose.connect(process.env.MONGO_URL); // ללא אפשרויות deprecated
+mongoose.connect(process.env.MONGO_URL);
 
 const adminSchema = new mongoose.Schema({
   username: String,
@@ -83,7 +83,6 @@ app.post('/api/class', async (req, res) => {
   res.json(cls);
 });
 
-// שים לב: סופר אדמין מקבל את כל הכיתות, לא משנה adminUsername
 app.get('/api/classes', async (req, res) => {
   const { adminUsername } = req.query;
   if (adminUsername === SUPERADMIN_USERNAME) {
@@ -101,7 +100,6 @@ app.get('/api/class/:id', async (req, res) => {
   res.json(cls);
 });
 
-// סופר אדמין (וכל מורה) יכול למחוק כל כיתה
 app.delete('/api/class/:id', async (req, res) => {
   await Class.findByIdAndDelete(req.params.id);
   res.json({ message: 'Deleted' });
