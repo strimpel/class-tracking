@@ -6,6 +6,9 @@ import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import mongoose from 'mongoose';
 
+const SUPERADMIN_USERNAME = "superadmin";
+const SUPERADMIN_PASSWORD = "super123@"; // תוכל להחליף למה שתרצה
+
 const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
@@ -18,7 +21,6 @@ mongoose.connect(process.env.MONGO_URL, {
   useUnifiedTopology: true,
 });
 
-// Models
 const adminSchema = new mongoose.Schema({
   username: String,
   passwordHash: String
@@ -35,7 +37,7 @@ const taskSchema = new mongoose.Schema({
   id: String,
   name: String,
   isCurrent: Boolean,
-  statuses: mongoose.Schema.Types.Mixed // studentId -> status
+  statuses: mongoose.Schema.Types.Mixed
 }, { _id: false });
 
 const classSchema = new mongoose.Schema({
@@ -50,6 +52,9 @@ const Class = mongoose.model('Class', classSchema);
 // ----------- Auth ------------- //
 app.post('/api/register', async (req, res) => {
   const { username, password } = req.body;
+  if (username === SUPERADMIN_USERNAME) {
+    return res.status(403).json({ message: "Cannot register as superadmin" });
+  }
   if (await Admin.findOne({ username })) {
     return res.status(409).json({ message: 'Username exists' });
   }
@@ -60,6 +65,9 @@ app.post('/api/register', async (req, res) => {
 
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
+  if (username === SUPERADMIN_USERNAME && password === SUPERADMIN_PASSWORD) {
+    return res.json({ success: true, username, isSuperAdmin: true });
+  }
   const admin = await Admin.findOne({ username });
   if (!admin || !(await bcrypt.compare(password, admin.passwordHash))) {
     return res.status(401).json({ message: 'Invalid credentials' });
@@ -78,8 +86,13 @@ app.post('/api/class', async (req, res) => {
   res.json(cls);
 });
 
+// שים לב: סופר אדמין מקבל את כל הכיתות, לא משנה adminUsername
 app.get('/api/classes', async (req, res) => {
   const { adminUsername } = req.query;
+  if (adminUsername === SUPERADMIN_USERNAME) {
+    const classes = await Class.find();
+    return res.json(classes);
+  }
   const classes = await Class.find({ adminUsername });
   res.json(classes);
 });
@@ -91,6 +104,7 @@ app.get('/api/class/:id', async (req, res) => {
   res.json(cls);
 });
 
+// סופר אדמין (וכל מורה) יכול למחוק כל כיתה
 app.delete('/api/class/:id', async (req, res) => {
   await Class.findByIdAndDelete(req.params.id);
   res.json({ message: 'Deleted' });
@@ -112,12 +126,10 @@ app.post('/api/join', async (req, res) => {
 
 // ---------- Socket.io for Real-Time ---------- //
 io.on('connection', (socket) => {
-  // הצטרפות לכיתה (room)
   socket.on('join_class', ({ classId }) => {
     socket.join(classId);
   });
 
-  // הוספת משימה
   socket.on('add_task', async ({ classId, name }) => {
     const cls = await Class.findById(classId);
     if (!cls) return;
@@ -128,7 +140,6 @@ io.on('connection', (socket) => {
     io.to(classId).emit('update_class', cls);
   });
 
-  // סימון משימה כנוכחית
   socket.on('set_current_task', async ({ classId, taskId }) => {
     const cls = await Class.findById(classId);
     if (!cls) return;
@@ -137,7 +148,6 @@ io.on('connection', (socket) => {
     io.to(classId).emit('update_class', cls);
   });
 
-  // מחיקת משימה
   socket.on('delete_task', async ({ classId, taskId }) => {
     const cls = await Class.findById(classId);
     if (!cls) return;
@@ -146,7 +156,6 @@ io.on('connection', (socket) => {
     io.to(classId).emit('update_class', cls);
   });
 
-  // עדכון סטטוס של תלמיד
   socket.on('update_status', async ({ classId, taskId, studentId, status }) => {
     const cls = await Class.findById(classId);
     if (!cls) return;
