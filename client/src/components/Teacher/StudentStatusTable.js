@@ -11,11 +11,11 @@ const statuses = [
 export default function StudentStatusTable({ classObj, task }) {
   const handleStatusChange = (studentId, newStatus) => {
     socket.emit("update_status", {
-      classId: classObj.id,
-      taskId: task.id,
-      studentId,
-      status: newStatus,
-    });
+  classId: classObj._id, // זה שם השדה הנכון
+  taskId: task.id,
+  studentId,
+  status: newStatus,
+});
   };
 
   return (
