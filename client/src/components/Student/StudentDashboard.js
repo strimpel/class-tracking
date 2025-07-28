@@ -17,13 +17,12 @@ export default function StudentDashboard({ student, onLogout }) {
 
     // שליפת מצב עדכני
     axios.get(`${API_URL}/api/class/${student.classId}`).then(({ data }) => {
-  setClassObj(data);
-});
-
+      setClassObj(data);
+    });
 
     // קבלת עדכונים חיים
     function updateListener(cls) {
-      if (cls.id === student.classId) setClassObj(cls);
+      if (cls._id === student.classId) setClassObj(cls);
     }
     socket.on("update_class", updateListener);
     return () => socket.off("update_class", updateListener);
