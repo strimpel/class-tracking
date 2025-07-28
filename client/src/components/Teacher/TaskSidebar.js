@@ -9,16 +9,16 @@ export default function TaskSidebar({ classObj, setClasses, onSelectTask, select
 
   const addTask = () => {
     if (!taskName) return;
-    socket.emit("add_task", { classId: classObj.id, name: taskName });
+    socket.emit("add_task", { classId: classObj._id, name: taskName });
     setTaskName("");
   };
 
   const deleteTask = id => {
-    socket.emit("delete_task", { classId: classObj.id, taskId: id });
+    socket.emit("delete_task", { classId: classObj._id, taskId: id });
   };
 
   const setCurrentTask = id => {
-    socket.emit("set_current_task", { classId: classObj.id, taskId: id });
+    socket.emit("set_current_task", { classId: classObj._id, taskId: id });
   };
 
   return (
