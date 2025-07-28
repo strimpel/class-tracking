@@ -15,7 +15,7 @@ export default function StudentTaskTable({ classObj, student }) {
 
   const handleStatusChange = (taskId, newStatus) => {
     socket.emit("update_status", {
-      classId: classObj.id,
+      classId: classObj._id, // שינוי כאן!
       taskId,
       studentId: student.studentId,
       status: newStatus,
