@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import mongoose from 'mongoose';
 
 const SUPERADMIN_USERNAME = "superadmin";
-const SUPERADMIN_PASSWORD = "super123@"; // תוכל להחליף למה שתרצה
+const SUPERADMIN_PASSWORD = "super123@"; // לשנות לסיסמא שלך
 
 const app = express();
 app.use(cors({ origin: '*' }));
@@ -16,10 +16,7 @@ app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
-mongoose.connect(process.env.MONGO_URL, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
+mongoose.connect(process.env.MONGO_URL); // ללא אפשרויות deprecated
 
 const adminSchema = new mongoose.Schema({
   username: String,
