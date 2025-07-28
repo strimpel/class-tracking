@@ -9,24 +9,18 @@ const API_URL = process.env.REACT_APP_SOCKET_URL || "http://localhost:4000";
 export default function StudentDashboard({ student, onLogout }) {
   const [classObj, setClassObj] = useState(null);
 
-  // משיכת פרטי כיתה וסטטוס בלייב
   useEffect(() => {
     if (!student.classId) return;
-    // חיבור לכיתה
     socket.emit("join_class", { classId: student.classId });
-
-    // שליפת מצב עדכני
     axios.get(`${API_URL}/api/class/${student.classId}`).then(({ data }) => {
       setClassObj(data);
     });
 
-    // קבלת עדכונים חיים
     function updateListener(cls) {
       if (cls._id === student.classId) setClassObj(cls);
     }
     socket.on("update_class", updateListener);
     return () => socket.off("update_class", updateListener);
-    // eslint-disable-next-line
   }, [student.classId]);
 
   if (!classObj) return <Typography>טוען נתוני כיתה...</Typography>;
