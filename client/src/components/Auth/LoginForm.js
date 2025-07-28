@@ -17,8 +17,8 @@ export default function LoginForm({ setTeacher }) {
         await axios.post(`${API_URL}/api/register`, { username, password });
         setRegisterMode(false);
       } else {
-        await axios.post(`${API_URL}/api/login`, { username, password });
-        setTeacher({ username });
+        const { data } = await axios.post(`${API_URL}/api/login`, { username, password });
+        setTeacher({ username: data.username, isSuperAdmin: data.isSuperAdmin }); // שים לב!
       }
     } catch (err) {
       setError(err?.response?.data?.message || "שגיאה");
