@@ -11,11 +11,11 @@ const statuses = [
 export default function StudentStatusTable({ classObj, task }) {
   const handleStatusChange = (studentId, newStatus) => {
     socket.emit("update_status", {
-  classId: classObj._id, // זה שם השדה הנכון
-  taskId: task.id,
-  studentId,
-  status: newStatus,
-});
+      classId: classObj._id,
+      taskId: task.id,
+      studentId,
+      status: newStatus,
+    });
   };
 
   return (
@@ -33,7 +33,7 @@ export default function StudentStatusTable({ classObj, task }) {
             <TableCell>
               <Select
                 size="small"
-                value={task.statuses[s.id] || "not_started"}
+                value={task.statuses?.[s.id] || "not_started"}
                 onChange={e => handleStatusChange(s.id, e.target.value)}
               >
                 {statuses.map(st => (
